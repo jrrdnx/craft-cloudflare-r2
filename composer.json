@@ -1,0 +1,63 @@
+{
+  "name": "jrrdnx/craft-cloudflare-r2",
+  "description": "Cloudflare R2 integration for Craft CMS",
+  "type": "craft-plugin",
+  "version": "0.1.0-beta",
+  "keywords": [
+    "s3",
+    "cms",
+    "craftcms",
+    "flysystem",
+	"cloudflare",
+    "r2",
+    "yii2"
+  ],
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Jarrod D Nix",
+      "homepage": "https://jarrodnix.dev/"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/jrrdnx/craft-cloudflare-r2/issues",
+    "docs": "https://github.com/jrrdnx/craft-cloudflare-r2/blob/main/README.md"
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "require": {
+    "php": "^8.0.2",
+    "craftcms/cms": "^4.0.0-beta.1",
+    "craftcms/flysystem": "^1.0.0-beta.2",
+    "league/flysystem-aws-s3-v3": "^3.0.0"
+  },
+  "require-dev": {
+    "craftcms/ecs": "dev-main",
+    "craftcms/phpstan": "dev-main",
+    "craftcms/rector": "dev-main"
+  },
+  "autoload": {
+    "psr-4": {
+      "jrrdnx\\cloudflarer2\\": "src/"
+    }
+  },
+  "scripts": {
+    "check-cs": "ecs check --ansi",
+    "fix-cs": "ecs check --ansi --fix",
+    "phpstan": "phpstan --memory-limit=1G"
+  },
+  "extra": {
+    "name": "Cloudflare R2",
+    "handle": "cloudflare-r2",
+    "documentationUrl": "https://github.com/jrrdnx/craft-cloudflare-r2/blob/main/README.md"
+  },
+  "config": {
+    "platform": {
+      "php": "8.0.2"
+    },
+    "allow-plugins": {
+      "yiisoft/yii2-composer": true,
+      "craftcms/plugin-installer": true
+    }
+  }
+}

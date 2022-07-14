@@ -103,6 +103,11 @@ class Fs extends FlysystemFs
     public string $bucket = '';
 
     /**
+     * @var string Region to use
+     */
+    public static string $region = 'auto';
+
+    /**
      * @var string Cache expiration period.
      */
     public string $expires = '';
@@ -139,7 +144,6 @@ class Fs extends FlysystemFs
         if (isset($config['manualBucket'])) {
             if (isset($config['bucketSelectionMode']) && $config['bucketSelectionMode'] === 'manual') {
                 $config['bucket'] = ArrayHelper::remove($config, 'manualBucket');
-                $config['region'] = 'auto';
             } else {
                 unset($config['manualBucket'], $config['manualRegion']);
             }
@@ -246,7 +250,7 @@ class Fs extends FlysystemFs
     protected function createAdapter(): FilesystemAdapter
     {
         $client = static::client($this->_getConfigArray(), $this->_getCredentials());
-        return new AwsS3V3Adapter($client, Craft::parseEnv($this->bucket), $this->_subfolder(), new PortableVisibilityConverter(Visibility::PRIVATE), null, [], false);
+        return new AwsS3V3Adapter($client, App::parseEnv($this->bucket), $this->_subfolder(), new PortableVisibilityConverter($this->visibility()), null, [], false);
     }
 
     /**
@@ -294,17 +298,6 @@ class Fs extends FlysystemFs
      */
     protected function invalidateCdnPath(string $path): bool
     {
-        if (!empty($this->cfDistributionId)) {
-            if (empty($this->pathsToInvalidate)) {
-                Craft::$app->on(Application::EVENT_AFTER_REQUEST, [$this, 'purgeQueuedPaths']);
-            }
-
-            // Ensure our paths are prefixed with configured subfolder
-            $path = $this->_getRootUrlPath() . $path;
-
-            $this->pathsToInvalidate[$path] = true;
-        }
-
         return true;
     }
 
@@ -313,34 +306,7 @@ class Fs extends FlysystemFs
      */
     public function purgeQueuedPaths(): void
     {
-        if (!empty($this->pathsToInvalidate)) {
-            // If there's a CloudFront distribution ID set, invalidate the path.
-            $cfClient = $this->_getCloudFrontClient();
-            $items = [];
-
-            foreach ($this->pathsToInvalidate as $path => $bool) {
-                $items[] = '/' . $this->_cfPrefix() . ltrim($path, '/');
-            }
-
-            try {
-                $cfClient->createInvalidation(
-                    [
-                        'DistributionId' => Craft::parseEnv($this->cfDistributionId),
-                        'InvalidationBatch' => [
-                            'Paths' =>
-                                [
-                                    'Quantity' => count($items),
-                                    'Items' => $items,
-                                ],
-                            'CallerReference' => 'Craft-' . StringHelper::randomString(24),
-                        ],
-                    ]
-                );
-            } catch (CloudFrontException $exception) {
-                // Log the warning, most likely due to 404. Allow the operation to continue, though.
-                Craft::warning($exception->getMessage());
-            }
-        }
+        return;
     }
 
     /**
@@ -363,8 +329,8 @@ class Fs extends FlysystemFs
         $params = [
             'Image' => [
                 'S3Object' => [
-                    'Name' => Craft::parseEnv($filePath),
-                    'Bucket' => Craft::parseEnv($this->bucket),
+                    'Name' => App::parseEnv($filePath),
+                    'Bucket' => App::parseEnv($this->bucket),
                 ],
             ],
         ];
@@ -397,7 +363,7 @@ class Fs extends FlysystemFs
     public static function buildConfigArray(?string $keyId = null, ?string $secret = null, ?string $accountId = null, bool $refreshToken = false): array
     {
 		$config = [
-            'region' => 'auto',
+            'region' => self::$region,
 			'endpoint' => 'https://'.$accountId.'.r2.cloudflarestorage.com',
             'version' => 'latest',
 			'credentials' => new Credentials($keyId, $secret)
@@ -416,7 +382,7 @@ class Fs extends FlysystemFs
      */
     private function _subfolder(): string
     {
-        if ($this->subfolder && ($subfolder = rtrim(Craft::parseEnv($this->subfolder), '/')) !== '') {
+        if ($this->subfolder && ($subfolder = rtrim(App::parseEnv($this->subfolder), '/')) !== '') {
             return $subfolder . '/';
         }
 
@@ -449,9 +415,9 @@ class Fs extends FlysystemFs
     /**
      * Get a CloudFront client.
      *
-     * @return CloudFrontClient
+     * @return null
      */
-    private function _getCloudFrontClient(): ?CloudFrontClient
+    private function _getCloudFrontClient()
     {
         return null;
     }
@@ -476,9 +442,9 @@ class Fs extends FlysystemFs
     private function _getCredentials(): array
     {
         return [
-            'keyId' => Craft::parseEnv($this->keyId),
-            'secret' => Craft::parseEnv($this->secret),
-            'accountId' => Craft::parseEnv($this->accountId),
+            'keyId' => App::parseEnv($this->keyId),
+            'secret' => App::parseEnv($this->secret),
+            'accountId' => App::parseEnv($this->accountId),
         ];
     }
 

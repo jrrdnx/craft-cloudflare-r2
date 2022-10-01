@@ -310,48 +310,6 @@ class Fs extends FlysystemFs
     }
 
     /**
-     * Attempt to detect focal point for a path on the bucket and return the
-     * focal point position as an array of decimal parts
-     *
-     * @param string $filePath
-     * @return array
-     */
-    public function detectFocalPoint(string $filePath): array
-    {
-        $extension = StringHelper::toLowerCase(pathinfo($filePath, PATHINFO_EXTENSION));
-
-        if (!in_array($extension, ['jpeg', 'jpg', 'png'])) {
-            return [];
-        }
-
-
-        $client = new RekognitionClient($this->_getConfigArray());
-        $params = [
-            'Image' => [
-                'S3Object' => [
-                    'Name' => App::parseEnv($filePath),
-                    'Bucket' => App::parseEnv($this->bucket),
-                ],
-            ],
-        ];
-
-        $faceData = $client->detectFaces($params);
-
-        if (!empty($faceData['FaceDetails'])) {
-            $face = array_shift($faceData['FaceDetails']);
-            if ($face['Confidence'] > 80) {
-                $box = $face['BoundingBox'];
-                return [
-                    number_format($box['Left'] + ($box['Width'] / 2), 4),
-                    number_format($box['Top'] + ($box['Height'] / 2), 4),
-                ];
-            }
-        }
-
-        return [];
-    }
-
-    /**
      * Build the config array based on a keyID and secret
      *
      * @param ?string $keyId The key ID

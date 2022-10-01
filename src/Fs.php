@@ -12,7 +12,6 @@ namespace jrrdnx\cloudflarer2;
 use Aws\Credentials\CredentialProvider;
 use Aws\Credentials\Credentials;
 use Aws\Handler\GuzzleV6\GuzzleHandler;
-use Aws\Rekognition\RekognitionClient;
 use Aws\S3\Exception\S3Exception;
 use Aws\Sts\StsClient;
 use Craft;

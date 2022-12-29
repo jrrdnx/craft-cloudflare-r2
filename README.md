@@ -2,11 +2,6 @@
 
 [Cloudflare R2](https://www.cloudflare.com/products/r2/) filesystem for Craft CMS
 
-> **Note**
-> This plugin will remain in Beta at least as long as Cloudflare R2 is in Beta.
-
-[Open an Issue](https://github.com/jrrdnx/craft-cloudflare-r2/issues)
-
 ## Requirements
 
 This plugin requires Craft CMS ^4.0.0-beta.1 and PHP ^8.0.2
@@ -27,9 +22,6 @@ To install the plugin, follow these instructions.
 
 ## Configuring filesystem
 
-> **Warning**
-> Cloudflare R2 does not currently (as of the time of this writing) support ACLs with public-read access. In order to make your objects readable, you will need to set up a worker (read "Making objects public" below).
-
 1. Navigate to Settings -> Filesystems and click the "New Filesystem" button.
 2. Select "Cloudflare R2" from the "Filesystem Type" dropdown.
 3. Enter your Account ID, Access Key ID, and Secret Access Key (it's recommended to store these in your `.env` file and reference the environment variables here).
@@ -38,9 +30,7 @@ To install the plugin, follow these instructions.
 
 ### Making objects public (optional)
 
-1. In Cloudflare, you'll need to set up a subdomain for your workers. Navigate to Workers, and if you haven't already you'll be prompted to create this first.
-2. Follow [Cloudflare's Get Started Guide](https://developers.cloudflare.com/r2/get-started/) to install and authenticate Wrangler, bind your bucket to a Worker, enable GET requests to your objects, and deploy your Worker.
-3. Your filesystem's "Base URL" will look like `https://WORKER_NAME.SUBDOMAIN.workers.dev`
+See [Create Public Buckets on R2](https://developers.cloudflare.com/r2/data-access/public-buckets/) for details on adding a custom domain or managing public buckets through r2.dev, or [Use R2 from Workers](https://developers.cloudflare.com/r2/data-access/workers-api/workers-api-usage/) for more fine-tuned access control. Also feel free to reference a full guide to [Configuring a Cloudflare R2 Bucket and Worker for Public Access](https://jarrodnix.dev/blog/configuring-a-cloudflare-r2-bucket-and-worker-for-public-access).
 
 ## Misc
 

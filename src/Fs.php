@@ -403,26 +403,6 @@ class Fs extends FlysystemFs
     }
 
     /**
-     * Returns the parsed CloudFront distribution prefix
-     *
-     * @return string
-     */
-    private function _cfPrefix(): string
-    {
-        return '';
-    }
-
-    /**
-     * Get a CloudFront client.
-     *
-     * @return null
-     */
-    private function _getCloudFrontClient()
-    {
-        return null;
-    }
-
-    /**
      * Get the config array for AWS Clients.
      *
      * @return array

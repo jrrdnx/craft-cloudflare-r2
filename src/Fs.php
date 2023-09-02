@@ -9,12 +9,8 @@ declare(strict_types=1);
 
 namespace jrrdnx\cloudflarer2;
 
-use Aws\Credentials\CredentialProvider;
 use Aws\Credentials\Credentials;
-use Aws\Handler\GuzzleV6\GuzzleHandler;
 use Aws\Rekognition\RekognitionClient;
-use Aws\S3\Exception\S3Exception;
-use Aws\Sts\StsClient;
 use Craft;
 use craft\behaviors\EnvAttributeParserBehavior;
 use craft\flysystem\base\FlysystemFs;
@@ -25,11 +21,9 @@ use craft\helpers\DateTimeHelper;
 use craft\helpers\StringHelper;
 use DateTime;
 use InvalidArgumentException;
-use League\Flysystem\AwsS3V3\AwsS3V3Adapter;
 use League\Flysystem\AwsS3V3\PortableVisibilityConverter;
 use League\Flysystem\FilesystemAdapter;
 use League\Flysystem\Visibility;
-use yii\base\Application;
 
 /**
  * Class Fs

@@ -245,12 +245,12 @@ class Fs extends FlysystemFs
 
     /**
      * @inheritdoc
-     * @return AwsS3V3Adapter
+     * @return FilesystemAdapter
      */
     protected function createAdapter(): FilesystemAdapter
     {
         $client = static::client($this->_getConfigArray(), $this->_getCredentials());
-        return new AwsS3V3Adapter($client, App::parseEnv($this->bucket), $this->_subfolder(), new PortableVisibilityConverter($this->visibility()), null, [], false);
+        return new CloudflareR2Adapter($client, App::parseEnv($this->bucket), $this->_subfolder(), new PortableVisibilityConverter($this->visibility()), null, [], false);
     }
 
     /**
@@ -400,26 +400,6 @@ class Fs extends FlysystemFs
             return $this->_subfolder();
         }
         return '';
-    }
-
-    /**
-     * Returns the parsed CloudFront distribution prefix
-     *
-     * @return string
-     */
-    private function _cfPrefix(): string
-    {
-        return '';
-    }
-
-    /**
-     * Get a CloudFront client.
-     *
-     * @return null
-     */
-    private function _getCloudFrontClient()
-    {
-        return null;
     }
 
     /**

@@ -2,7 +2,7 @@
   "name": "jrrdnx/craft-cloudflare-r2",
   "description": "Cloudflare R2 integration for Craft CMS",
   "type": "craft-plugin",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "keywords": [
     "s3",
     "cms",
@@ -21,14 +21,14 @@
   ],
   "support": {
     "issues": "https://github.com/jrrdnx/craft-cloudflare-r2/issues",
-    "docs": "https://github.com/jrrdnx/craft-cloudflare-r2/blob/main/README.md"
+    "docs": "https://jarrodnix.dev/plugins/cloudflare-r2/v1"
   },
   "minimum-stability": "dev",
   "prefer-stable": true,
   "require": {
     "php": "^8.0.2",
-    "craftcms/cms": "^4.0.0-beta.1",
-    "craftcms/flysystem": "^1.0.0-beta.2",
+    "craftcms/cms": "^4.0.0-beta.1 || ^5.0.0-beta.1",
+    "craftcms/flysystem": "^1.0.0 || ^2.0.0",
     "league/flysystem-aws-s3-v3": "^3.0.0"
   },
   "require-dev": {
@@ -49,7 +49,7 @@
   "extra": {
     "name": "Cloudflare R2",
     "handle": "cloudflare-r2",
-    "documentationUrl": "https://github.com/jrrdnx/craft-cloudflare-r2/blob/main/README.md"
+    "documentationUrl": "https://jarrodnix.dev/plugins/cloudflare-r2/v1"
   },
   "config": {
     "platform": {

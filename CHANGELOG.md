@@ -1,9 +1,15 @@
 # Release Notes for Cloudflare R2
 
+## 1.1.0 - 2024-02-10
+
+### Changed
+- Updated requirements for Craft CMS 5 compatibility
+- Updated documentation URLs
+
 ## 1.0.1 - 2023-09-02
 
 ### Fixed
-- Prevent calls to GetObjectAcl when copying and moving files (#6)
+- Prevent calls to GetObjectAcl when copying and moving files ([#6](https://github.com/jrrdnx/craft-cloudflare-r2/issues/6))
 - Cleanup unused classes
 
 ## 1.0.0 - 2022-12-29

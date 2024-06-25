@@ -1,5 +1,8 @@
 # Release Notes for Cloudflare R2
 
+## 1.1.1 - 2024-06-24
+- Update variables/classes to avoid conflicts with S3 plugin
+
 ## 1.1.0 - 2024-02-10
 
 ### Changed

@@ -1,27 +1,27 @@
 $(document).ready(function () {
-  const $s3AccountIdInput = $('.s3-account-id');
-  const $s3AccessKeyIdInput = $('.s3-key-id');
-  const $s3SecretAccessKeyInput = $('.s3-secret-key');
-  const $s3BucketSelect = $('.s3-bucket-select > select');
-  const $s3RefreshBucketsBtn = $('.s3-refresh-buckets');
-  const $s3RefreshBucketsSpinner = $s3RefreshBucketsBtn.parent().next().children();
-  const $manualBucket = $('.s3-manualBucket');
+  const $r2AccountIdInput = $('.r2-account-id');
+  const $r2AccessKeyIdInput = $('.r2-key-id');
+  const $r2SecretAccessKeyInput = $('.r2-secret-key');
+  const $r2BucketSelect = $('.r2-bucket-select > select');
+  const $r2RefreshBucketsBtn = $('.r2-refresh-buckets');
+  const $r2RefreshBucketsSpinner = $r2RefreshBucketsBtn.parent().next().children();
+  const $manualBucket = $('.r2-manualBucket');
   const $fsUrl = $('.fs-url');
   const $hasUrls = $('input[name=hasUrls]');
-  let refreshingS3Buckets = false;
+  let refreshingR2Buckets = false;
 
-  $s3RefreshBucketsBtn.click(function() {
-    if ($s3RefreshBucketsBtn.hasClass('disabled')) {
+  $r2RefreshBucketsBtn.click(function() {
+    if ($r2RefreshBucketsBtn.hasClass('disabled')) {
       return;
     }
 
-    $s3RefreshBucketsBtn.addClass('disabled');
-    $s3RefreshBucketsSpinner.removeClass('hidden');
+    $r2RefreshBucketsBtn.addClass('disabled');
+    $r2RefreshBucketsSpinner.removeClass('hidden');
 
     const data = {
-	  accountId: $s3AccountIdInput.val(),
-      keyId: $s3AccessKeyIdInput.val(),
-      secret: $s3SecretAccessKeyInput.val()
+	  accountId: $r2AccountIdInput.val(),
+      keyId: $r2AccessKeyIdInput.val(),
+      secret: $r2SecretAccessKeyInput.val()
     };
 
     Craft.sendActionRequest('POST', 'cloudflare-r2/buckets/load-bucket-data', {data})
@@ -30,60 +30,60 @@ $(document).ready(function () {
           return;
         }
         //
-        const currentBucket = $s3BucketSelect.val();
+        const currentBucket = $r2BucketSelect.val();
         let currentBucketStillExists = false;
 
-        refreshingS3Buckets = true;
+        refreshingR2Buckets = true;
 
-        $s3BucketSelect.prop('readonly', false).empty();
+        $r2BucketSelect.prop('readonly', false).empty();
 
         for (let i = 0; i < data.buckets.length; i++) {
           if (data.buckets[i].bucket == currentBucket) {
             currentBucketStillExists = true;
           }
 
-          $s3BucketSelect.append('<option value="' + data.buckets[i].bucket + '" data-url-prefix="' + data.buckets[i].urlPrefix + '">' + data.buckets[i].bucket + '</option>');
+          $r2BucketSelect.append('<option value="' + data.buckets[i].bucket + '" data-url-prefix="' + data.buckets[i].urlPrefix + '">' + data.buckets[i].bucket + '</option>');
         }
 
         if (currentBucketStillExists) {
-          $s3BucketSelect.val(currentBucket);
+          $r2BucketSelect.val(currentBucket);
         }
 
-        refreshingS3Buckets = false;
+        refreshingR2Buckets = false;
 
         if (!currentBucketStillExists) {
-          $s3BucketSelect.trigger('change');
+          $r2BucketSelect.trigger('change');
         }
       })
       .catch(({response}) => {
         alert(response.data.message);
       })
       .finally(() => {
-        $s3RefreshBucketsBtn.removeClass('disabled');
-        $s3RefreshBucketsSpinner.addClass('hidden');
+        $r2RefreshBucketsBtn.removeClass('disabled');
+        $r2RefreshBucketsSpinner.addClass('hidden');
       });
   });
 
-  $s3BucketSelect.change(function() {
-    if (refreshingS3Buckets) {
+  $r2BucketSelect.change(function() {
+    if (refreshingR2Buckets) {
       return;
     }
 
-    const $selectedOption = $s3BucketSelect.children('option:selected');
+    const $selectedOption = $r2BucketSelect.children('option:selected');
 
     $fsUrl.val($selectedOption.data('url-prefix'));
   });
 
-  const s3ChangeExpiryValue = function() {
+  const r2ChangeExpiryValue = function() {
     const parent = $(this).parents('.field');
-    const amount = parent.find('.s3-expires-amount').val();
-    const period = parent.find('.s3-expires-period select').val();
+    const amount = parent.find('.r2-expires-amount').val();
+    const period = parent.find('.r2-expires-period select').val();
 
     const combinedValue = (parseInt(amount, 10) === 0 || period.length === 0) ? '' : amount + ' ' + period;
 
     parent.find('[type=hidden]').val(combinedValue);
   };
 
-  $('.s3-expires-amount').keyup(s3ChangeExpiryValue).change(s3ChangeExpiryValue);
-  $('.s3-expires-period select').change(s3ChangeExpiryValue);
+  $('.r2-expires-amount').keyup(r2ChangeExpiryValue).change(r2ChangeExpiryValue);
+  $('.r2-expires-period select').change(r2ChangeExpiryValue);
 });

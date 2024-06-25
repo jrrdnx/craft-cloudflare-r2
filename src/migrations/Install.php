@@ -8,7 +8,7 @@
 namespace jrrdnx\cloudflarer2\migrations;
 
 use Craft;
-use jrrdnx\cloudflarer2\Fs;
+use jrrdnx\cloudflarer2\Volume;
 use craft\db\Migration;
 use craft\services\ProjectConfig;
 

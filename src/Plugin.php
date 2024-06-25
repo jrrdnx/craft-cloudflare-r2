@@ -11,7 +11,7 @@ use craft\base\Element;
 use craft\elements\Asset;
 use craft\events\ModelEvent;
 use craft\events\RegisterComponentTypesEvent;
-use craft\services\Fs as FsService;
+use craft\services\Volumes;
 use yii\base\Event;
 
 /**
@@ -27,7 +27,7 @@ class Plugin extends \craft\base\Plugin
     /**
      * @inheritdoc
      */
-    public string $schemaVersion = '1.0';
+    public $schemaVersion = '1.0';
 
     // Public Methods
     // =========================================================================
@@ -39,8 +39,8 @@ class Plugin extends \craft\base\Plugin
     {
         parent::init();
 
-        Event::on(FsService::class, FsService::EVENT_REGISTER_FILESYSTEM_TYPES, function(RegisterComponentTypesEvent $event) {
-            $event->types[] = Fs::class;
+        Event::on(Volumes::class, Volumes::EVENT_REGISTER_VOLUME_TYPES, function(RegisterComponentTypesEvent $event) {
+            $event->types[] = Volume::class;
         });
     }
 }

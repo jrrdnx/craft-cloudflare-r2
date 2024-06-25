@@ -5,9 +5,9 @@
     id: 'accountId',
     name: 'accountId',
     suggestEnvVars: true,
-    value: fs.accountId,
-    errors: fs.getErrors('accountId'),
-    class: 's3-account-id'
+    value: volume.accountId,
+    errors: volume.getErrors('accountId'),
+    class: 'r2-account-id'
 }) }}
 
 {{ forms.autosuggestField({
@@ -15,9 +15,9 @@
     id: 'keyId',
     name: 'keyId',
     suggestEnvVars: true,
-    value: fs.keyId,
-    errors: fs.getErrors('keyId'),
-    class: 's3-key-id'
+    value: volume.keyId,
+    errors: volume.getErrors('keyId'),
+    class: 'r2-key-id'
 }) }}
 
 {{ forms.autosuggestField({
@@ -25,9 +25,9 @@
     id: 'secret',
     name: 'secret',
     suggestEnvVars: true,
-    value: fs.secret,
-    errors: fs.getErrors('secret'),
-    class: 's3-secret-key'
+    value: volume.secret,
+    errors: volume.getErrors('secret'),
+    class: 'r2-secret-key'
 }) }}
 
 {% set bucketInput %}
@@ -38,35 +38,35 @@
                 { label: 'Choose…'|t('cloudflare-r2'), value: 'choose' },
                 { label: 'Manual…'|t('cloudflare-r2'), value: 'manual' }
             ],
-            value: fs.bucketSelectionMode,
+            value: volume.bucketSelectionMode,
             toggle: true,
             targetPrefix: '.bsm-'
         }) }}
 
-        <div class="bsm-choose{% if fs.bucketSelectionMode == 'manual' %} hidden{% endif %}">
+        <div class="bsm-choose{% if volume.bucketSelectionMode == 'manual' %} hidden{% endif %}">
             {{ forms.select({
                 id: 'bucket',
                 name: 'bucket',
-                options: { (fs.bucket): fs.bucket },
-                value: fs.bucketSelectionMode == 'manual' ? fs.bucket,
+                options: { (volume.bucket): volume.bucket },
+                value: volume.bucketSelectionMode == 'manual' ? volume.bucket,
                 readonly: true,
-                class: 's3-bucket-select'
+                class: 'r2-bucket-select'
             }) }}
         </div>
-        <div class="bsm-choose{% if fs.bucketSelectionMode == 'manual' %} hidden{% endif %}">
-            <div class="btn s3-refresh-buckets">{{ "Refresh"|t('cloudflare-r2') }}</div>
+        <div class="bsm-choose{% if volume.bucketSelectionMode == 'manual' %} hidden{% endif %}">
+            <div class="btn r2-refresh-buckets">{{ "Refresh"|t('cloudflare-r2') }}</div>
         </div>
-        <div class="bsm-choose{% if fs.bucketSelectionMode == 'manual' %} hidden{% endif %}">
+        <div class="bsm-choose{% if volume.bucketSelectionMode == 'manual' %} hidden{% endif %}">
             <div class="spinner hidden"></div>
         </div>
 
-        <div class="bsm-manual{% if fs.bucketSelectionMode == 'choose' %} hidden{% endif %} flex-grow">
+        <div class="bsm-manual{% if volume.bucketSelectionMode == 'choose' %} hidden{% endif %} flex-grow">
             {{ forms.autosuggest({
                 label: "Bucket"|t('cloudflare-r2'),
-                class: 'ltr s3-manualBucket',
+                class: 'ltr r2-manualBucket',
                 name: 'manualBucket',
                 suggestEnvVars: true,
-                value: fs.bucket,
+                value: volume.bucket,
                 placeholder: 'Bucket'|t('cloudflare-r2')
             }) }}
         </div>
@@ -78,18 +78,18 @@
     label: "Bucket"|t('cloudflare-r2'),
     id: 'bucket',
     required: true,
-    errors: fs.getErrors('bucket'),
+    errors: volume.getErrors('bucket'),
 }, bucketInput) }}
 
 {{ forms.autosuggestField({
     label: "Subfolder"|t('cloudflare-r2'),
-    instructions: "If you want to use a bucket’s subfolder as a fs, specify the path to use here."|t('cloudflare-r2'),
+    instructions: "If you want to use a bucket’s subfolder as a Volume, specify the path to use here."|t('cloudflare-r2'),
     id: 'subfolder',
     class: 'ltr',
     name: 'subfolder',
     suggestEnvVars: true,
-    value: fs.subfolder,
-    errors: fs.getErrors('subfolder'),
+    value: volume.subfolder,
+    errors: volume.getErrors('subfolder'),
     placeholder: "path/to/subfolder"|t('cloudflare-r2')
 }) }}
 
@@ -97,14 +97,14 @@
     label: "Add the subfolder to the Base URL?"|t('cloudflare-r2'),
     instructions: "Turn this on if you want to add the specified subfolder to the Base URL."|t('cloudflare-r2'),
     name: 'addSubfolderToRootUrl',
-    on: fs.addSubfolderToRootUrl,
+    on: volume.addSubfolderToRootUrl,
 }) }}
 
 <hr/>
 
 <hr />
 {% set cacheInput %}
-    {% set expires = (fs.expires|length > 0 ? fs.expires|split(' ') : ['', ''])%}
+    {% set expires = (volume.expires|length > 0 ? volume.expires|split(' ') : ['', ''])%}
 
     <div class="flex">
         <div>
@@ -112,19 +112,19 @@
                 id: 'expiresAmount',
                 value: expires[0],
                 size: 2,
-                class: 's3-expires-amount'
+                class: 'r2-expires-amount'
             }) }}
         </div>
         {{ forms.select({
             id: 'expiresPeriod',
             options: periods,
             value: expires[1],
-            class: 's3-expires-period'
+            class: 'r2-expires-period'
         }) }}
     </div>
     {{ forms.hidden({
         name: "expires",
-        value: fs.expires,
+        value: volume.expires,
         class: "expires-combined"
     }) }}
 {% endset %}

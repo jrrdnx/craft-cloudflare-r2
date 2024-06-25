@@ -3,7 +3,7 @@
 namespace jrrdnx\cloudflarer2\controllers;
 
 use Craft;
-use jrrdnx\cloudflarer2\Fs;
+use jrrdnx\cloudflarer2\Volume;
 use craft\helpers\App;
 use craft\web\Controller as BaseController;
 use yii\web\Response;
@@ -42,7 +42,7 @@ class BucketsController extends BaseController
 
         try {
 			return $this->asJson([
-                'buckets' => Fs::loadBucketList($accountId, $keyId, $secret),
+                'buckets' => Volume::loadBucketList($accountId, $keyId, $secret),
             ]);
         } catch (\Throwable $e) {
             return $this->asFailure($e->getMessage());

@@ -12,8 +12,8 @@ namespace jrrdnx\cloudflarer2;
 use Aws\Credentials\Credentials;
 use Aws\Rekognition\RekognitionClient;
 use Craft;
+use craft\base\FlysystemVolume;
 use craft\behaviors\EnvAttributeParserBehavior;
-use craft\flysystem\base\FlysystemFs;
 use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Assets;
@@ -21,6 +21,8 @@ use craft\helpers\DateTimeHelper;
 use craft\helpers\StringHelper;
 use DateTime;
 use InvalidArgumentException;
+use League\Flysystem\AdapterInterface;
+use League\Flysystem\AwsS3v3\AwsS3Adapter;
 use League\Flysystem\AwsS3V3\PortableVisibilityConverter;
 use League\Flysystem\FilesystemAdapter;
 use League\Flysystem\Visibility;
@@ -33,7 +35,7 @@ use League\Flysystem\Visibility;
  * @author Jarrod D Nix
  * @since 1.0
  */
-class Fs extends FlysystemFs
+class Volume extends FlysystemVolume
 {
     // Constants
     // =========================================================================
@@ -65,6 +67,11 @@ class Fs extends FlysystemFs
 
     // Properties
     // =========================================================================
+
+    /**
+     * @var bool Whether this is a local source or not. Defaults to false.
+     */
+    protected $isVolumeLocal = false;
 
     /**
      * @var string Subfolder to use
@@ -180,8 +187,8 @@ class Fs extends FlysystemFs
      */
     public function getSettingsHtml(): ?string
     {
-        return Craft::$app->getView()->renderTemplate('cloudflare-r2/fsSettings', [
-            'fs' => $this,
+        return Craft::$app->getView()->renderTemplate('cloudflare-r2/volumeSettings', [
+            'volume' => $this,
             'periods' => array_merge(['' => ''], Assets::periodList()),
         ]);
     }
@@ -241,10 +248,10 @@ class Fs extends FlysystemFs
      * @inheritdoc
      * @return FilesystemAdapter
      */
-    protected function createAdapter(): FilesystemAdapter
+    protected function createAdapter()
     {
         $client = static::client($this->_getConfigArray(), $this->_getCredentials());
-        return new CloudflareR2Adapter($client, App::parseEnv($this->bucket), $this->_subfolder(), new PortableVisibilityConverter($this->visibility()), null, [], false);
+        return new AwsS3Adapter($client, App::parseEnv($this->bucket), $this->_subfolder(), [], false);
     }
 
     /**
@@ -429,6 +436,6 @@ class Fs extends FlysystemFs
      */
     protected function visibility(): string
     {
-        return $this->makeUploadsPublic ? Visibility::PUBLIC : Visibility::PRIVATE;
+        return $this->makeUploadsPublic ? AdapterInterface::VISIBILITY_PUBLIC : AdapterInterface::VISIBILITY_PRIVATE;
     }
 }

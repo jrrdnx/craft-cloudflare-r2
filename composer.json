@@ -2,7 +2,7 @@
   "name": "jrrdnx/craft-cloudflare-r2",
   "description": "Cloudflare R2 integration for Craft CMS",
   "type": "craft-plugin",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "keywords": [
     "s3",
     "cms",

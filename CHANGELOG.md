@@ -1,5 +1,10 @@
 # Release Notes for Cloudflare R2
 
+## 0.5.1 - 2024-06-24
+
+### Changed
+- Version bump to include changes to CHANGELOG.md and README.md
+
 ## 0.5.0 - 2024-06-24
 
 ### Changed

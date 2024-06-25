@@ -1,5 +1,10 @@
 # Release Notes for Cloudflare R2
 
+## 0.5.0 - 2024-06-24
+
+### Changed
+- Backported for Craft 3 compatibility
+
 ## 1.1.0 - 2024-02-10
 
 ### Changed

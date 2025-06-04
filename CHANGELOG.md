@@ -1,5 +1,10 @@
 # Release Notes for Cloudflare R2
 
+## 1.2.0 Unreleased
+
+### Added
+- Added configurable multipart upload threshold setting to support large file uploads based on Cloudflare plan limits
+
 ## 1.1.1 - 2024-06-24
 - Update variables/classes to avoid conflicts with S3 plugin
 

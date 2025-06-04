@@ -102,7 +102,20 @@
 
 <hr/>
 
+{{ forms.textField({
+    label: "Multipart Upload Threshold"|t('cloudflare-r2'),
+    instructions: "File size threshold in MB above which multipart uploads will be used. Set to 0 to disable multipart uploads. When your DNS is proxied through Cloudflare, the upload size limits for R2 are primarily governed by the request body size limits associated with your Cloudflare plan. Free and Pro plan users should set this to 100, Business plan users to 200, Enterprise plan users to 500."|t('cloudflare-r2'),
+    id: 'multipartThreshold',
+    name: 'multipartThreshold',
+    type: 'number',
+    min: '0',
+    size: 5,
+    value: fs.multipartThreshold ? fs.multipartThreshold / (1024 * 1024) : 0,
+    errors: fs.getErrors('multipartThreshold')
+}) }}
+
 <hr />
+
 {% set cacheInput %}
     {% set expires = (fs.expires|length > 0 ? fs.expires|split(' ') : ['', ''])%}
 

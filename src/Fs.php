@@ -123,6 +123,11 @@ class Fs extends FlysystemFs
     public bool $addSubfolderToRootUrl = true;
 
     /**
+     * @var int The file size threshold in bytes above which multipart upload will be used
+     */
+    public int $multipartThreshold = 0;
+
+    /**
      * @var array A list of paths to invalidate at the end of request.
      */
     protected array $pathsToInvalidate = [];
@@ -141,6 +146,11 @@ class Fs extends FlysystemFs
             } else {
                 unset($config['manualBucket'], $config['manualRegion']);
             }
+        }
+
+        // Convert multipart threshold from MB to bytes
+        if (isset($config['multipartThreshold'])) {
+            $config['multipartThreshold'] = (int)($config['multipartThreshold'] * 1024 * 1024);
         }
 
         parent::__construct($config);
@@ -172,6 +182,13 @@ class Fs extends FlysystemFs
     {
         return array_merge(parent::defineRules(), [
             [['bucket', 'accountId'], 'required'],
+            ['multipartThreshold', 'integer', 'min' => 0],
+            ['multipartThreshold', function($attribute, $params) {
+                $value = $this->$attribute;
+                if ($value > 0 && $value < (5 * 1024 * 1024)) { // 5MB minimum
+                    $this->addError($attribute, 'Multipart upload threshold must be at least 5MB.');
+                }
+            }],
         ]);
     }
 
@@ -244,7 +261,18 @@ class Fs extends FlysystemFs
     protected function createAdapter(): FilesystemAdapter
     {
         $client = static::client($this->_getConfigArray(), $this->_getCredentials());
-        return new CloudflareR2Adapter($client, App::parseEnv($this->bucket), $this->_subfolder(), new PortableVisibilityConverter($this->visibility()), null, [], false);
+        $options = [];
+
+        // Configure multipart upload if threshold is set
+        if ($this->multipartThreshold > 0) {
+            $options = [
+                'use_multipart_upload' => true,
+                'multipart_upload_threshold' => $this->multipartThreshold,
+                'multipart_upload_size' => 5 * 1024 * 1024, // 5MB minimum part size as per R2 requirements
+            ];
+        }
+
+        return new CloudflareR2Adapter($client, App::parseEnv($this->bucket), $this->_subfolder(), new PortableVisibilityConverter($this->visibility()), null, $options, false);
     }
 
     /**

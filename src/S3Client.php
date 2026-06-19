@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /**
  * @link https://jarrodnix.dev/
  * @copyright Copyright (c) Jarrod D Nix
@@ -12,26 +14,19 @@ use Aws\S3\Exception\S3Exception;
 use Aws\S3\S3Client as AwsS3Client;
 
 /**
- * Class S3Client
+ * Extended S3 client that refreshes credentials on ExpiredToken errors.
  *
  * @author Jarrod D Nix
  * @since 1.0
  */
 class S3Client extends AwsS3Client
 {
-    /**
-     * @var callable callback for generating new config, including new credentials.
-     */
+    /** @var callable|null Callback for generating new config with fresh credentials */
     private $_generateNewConfig;
 
-    /**
-     * @var AwsS3Client the wrapped AWS client to use for all requests
-     */
+    /** @var AwsS3Client The wrapped client used for all requests */
     private AwsS3Client $_wrappedClient;
 
-    /**
-     * @inheritdoc
-     */
     public function __construct(array $args)
     {
         if (!empty($args['generateNewConfig'])) {
@@ -39,27 +34,20 @@ class S3Client extends AwsS3Client
             unset($args['generateNewConfig']);
         }
 
-        // Create an instance of parent class to use.
-        $this->_wrappedClient = new parent($args);
+        $this->_wrappedClient = new AwsS3Client($args);
 
         parent::__construct($args);
     }
 
-    /**
-     * @inheritdoc
-     */
     public function execute(CommandInterface $command)
     {
         try {
-            // Just try to execute
             return $this->_wrappedClient->execute($command);
         } catch (S3Exception $exception) {
-            // Attempt to get new credentials
-            if ($exception->getAwsErrorCode() == 'ExpiredToken') {
+            if ($exception->getAwsErrorCode() == 'ExpiredToken' && $this->_generateNewConfig !== null) {
                 $clientConfig = call_user_func($this->_generateNewConfig);
-                $this->_wrappedClient = new parent($clientConfig);
+                $this->_wrappedClient = new AwsS3Client($clientConfig);
 
-                // Re-create the command to use the new credentials
                 $newCommand = $this->getCommand($command->getName(), $command->toArray());
                 return $this->_wrappedClient->execute($newCommand);
             }
@@ -68,12 +56,8 @@ class S3Client extends AwsS3Client
         }
     }
 
-    /**
-     * @inheritdoc
-     */
     public function getCommand($name, array $args = [])
     {
-        // Use the wrapped client which should have the latest credentials.
         return $this->_wrappedClient->getCommand($name, $args);
     }
 }

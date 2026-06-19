@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace jrrdnx\cloudflarer2\controllers;
 
-use Craft;
+use CraftCms\Cms\Support\Env;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
 use jrrdnx\cloudflarer2\Fs;
-use craft\helpers\App;
-use craft\web\Controller as BaseController;
-use yii\web\Response;
 
 /**
  * This controller provides functionality to load data from Cloudflare.
@@ -14,38 +16,20 @@ use yii\web\Response;
  * @author Jarrod D Nix
  * @since 1.0
  */
-class BucketsController extends BaseController
+class BucketsController extends Controller
 {
-    /**
-     * @inheritdoc
-     */
-    public function init(): void
+    public function loadBucketData(Request $request): JsonResponse
     {
-        parent::init();
-        $this->defaultAction = 'load-bucket-data';
-    }
-
-    /**
-     * Load bucket data for specified credentials.
-     *
-     * @return Response
-     */
-    public function actionLoadBucketData(): Response
-    {
-		$this->requirePostRequest();
-        $this->requireAcceptsJson();
-
-        $request = Craft::$app->getRequest();
-		$accountId = App::parseEnv($request->getRequiredBodyParam('accountId'));
-        $keyId = App::parseEnv($request->getRequiredBodyParam('keyId'));
-        $secret = App::parseEnv($request->getRequiredBodyParam('secret'));
+        $accountId = Env::parse($request->input('accountId', ''));
+        $keyId = Env::parse($request->input('keyId', ''));
+        $secret = Env::parse($request->input('secret', ''));
 
         try {
-			return $this->asJson([
+            return response()->json([
                 'buckets' => Fs::loadBucketList($accountId, $keyId, $secret),
             ]);
         } catch (\Throwable $e) {
-            return $this->asFailure($e->getMessage());
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 }

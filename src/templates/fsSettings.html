@@ -6,7 +6,7 @@
     name: 'accountId',
     suggestEnvVars: true,
     value: fs.accountId,
-    errors: fs.getErrors('accountId'),
+    errors: fs.errors.get('accountId'),
     class: 'r2-account-id'
 }) }}
 
@@ -16,7 +16,7 @@
     name: 'keyId',
     suggestEnvVars: true,
     value: fs.keyId,
-    errors: fs.getErrors('keyId'),
+    errors: fs.errors.get('keyId'),
     class: 'r2-key-id'
 }) }}
 
@@ -26,7 +26,7 @@
     name: 'secret',
     suggestEnvVars: true,
     value: fs.secret,
-    errors: fs.getErrors('secret'),
+    errors: fs.errors.get('secret'),
     class: 'r2-secret-key'
 }) }}
 
@@ -66,7 +66,7 @@
                 class: 'ltr r2-manualBucket',
                 name: 'manualBucket',
                 suggestEnvVars: true,
-                value: fs.bucket,
+                value: fs.manualBucket,
                 placeholder: 'Bucket'|t('cloudflare-r2')
             }) }}
         </div>
@@ -78,7 +78,7 @@
     label: "Bucket"|t('cloudflare-r2'),
     id: 'bucket',
     required: true,
-    errors: fs.getErrors('bucket'),
+    errors: fs.errors.get('bucket')|merge(fs.errors.get('manualBucket')),
 }, bucketInput) }}
 
 {{ forms.autosuggestField({
@@ -89,7 +89,7 @@
     name: 'subfolder',
     suggestEnvVars: true,
     value: fs.subfolder,
-    errors: fs.getErrors('subfolder'),
+    errors: fs.errors.get('subfolder'),
     placeholder: "path/to/subfolder"|t('cloudflare-r2')
 }) }}
 
@@ -135,4 +135,4 @@
     id: 'cacheDuration',
 }, cacheInput) }}
 
-{% do view.registerAssetBundle("jrrdnx\\cloudflarer2\\AwsS3Bundle") %}
+{# JS is registered globally via the plugin's $scripts property #}

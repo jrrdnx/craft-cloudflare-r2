@@ -11,19 +11,13 @@ namespace jrrdnx\cloudflarer2;
 
 use Aws\Credentials\Credentials;
 use Aws\Rekognition\RekognitionClient;
-use Craft;
-use craft\behaviors\EnvAttributeParserBehavior;
-use craft\flysystem\base\FlysystemFs;
-use craft\helpers\App;
-use craft\helpers\ArrayHelper;
-use craft\helpers\Assets;
-use craft\helpers\DateTimeHelper;
-use craft\helpers\StringHelper;
+use CraftCms\Cms\Filesystem\Filesystems\Filesystem;
+use CraftCms\Cms\Support\Env;
+use CraftCms\Cms\Twig\TemplateRenderer;
+use CraftCms\Cms\View\TemplateMode;
 use DateTime;
+use Illuminate\Validation\Rule;
 use InvalidArgumentException;
-use League\Flysystem\AwsS3V3\PortableVisibilityConverter;
-use League\Flysystem\FilesystemAdapter;
-use League\Flysystem\Visibility;
 
 /**
  * Class Fs
@@ -33,7 +27,7 @@ use League\Flysystem\Visibility;
  * @author Jarrod D Nix
  * @since 1.0
  */
-class Fs extends FlysystemFs
+class Fs extends Filesystem
 {
     // Constants
     // =========================================================================
@@ -42,22 +36,12 @@ class Fs extends FlysystemFs
     public const STORAGE_REDUCED_REDUNDANCY = 'REDUCED_REDUNDANCY';
     public const STORAGE_STANDARD_IA = 'STANDARD_IA';
 
-    /**
-     * Cache key to use for caching purposes
-     */
     public const CACHE_KEY_PREFIX = 'r2.';
-
-    /**
-     * Cache duration for access token
-     */
     public const CACHE_DURATION_SECONDS = 3600;
 
     // Static
     // =========================================================================
 
-    /**
-     * @inheritdoc
-     */
     public static function displayName(): string
     {
         return 'Cloudflare R2';
@@ -66,49 +50,38 @@ class Fs extends FlysystemFs
     // Properties
     // =========================================================================
 
-    /**
-     * @var string Subfolder to use
-     */
+    /** @var string Subfolder to use */
     public string $subfolder = '';
 
-    /**
-     * @var string R2 account ID
-     */
+    /** @var string R2 account ID */
     public string $accountId = '';
 
-    /**
-     * @var string R2 key ID
-     */
+    /** @var string R2 key ID */
     public string $keyId = '';
 
-    /**
-     * @var string R2 key secret
-     */
+    /** @var string R2 key secret */
     public string $secret = '';
 
-    /**
-     * @var string Bucket selection mode ('choose' or 'manual')
-     */
+    /** @var string Bucket selection mode ('choose' or 'manual') */
     public string $bucketSelectionMode = 'choose';
 
-    /**
-     * @var string Bucket to use
-     */
-    public string $bucket = '';
+    /** @var string|null Bucket from the dropdown (choose mode) */
+    public ?string $bucket = null;
 
     /**
-     * @var string Region to use
+     * @var string|null Bucket entered manually (manual mode).
+     * Stored separately so Craft 6's post-construction property injection
+     * cannot overwrite whichever field the user actually filled in.
      */
-    public static string $region = 'auto';
+    public ?string $manualBucket = null;
 
-    /**
-     * @var string Cache expiration period.
-     */
+    /** @var string Region to use (always 'auto' for R2) */
+    public string $region = 'auto';
+
+    /** @var string Cache expiration period */
     public string $expires = '';
 
-    /**
-     * @var bool Set ACL for Uploads
-     */
+    /** @var bool Set ACL for uploads */
     public bool $makeUploadsPublic = false;
 
     /**
@@ -117,80 +90,64 @@ class Fs extends FlysystemFs
      */
     public string $storageClass = '';
 
-    /**
-     * @var bool Whether the specified sub folder should be added to the root URL
-     */
+    /** @var bool Whether the specified subfolder should be added to the root URL */
     public bool $addSubfolderToRootUrl = true;
-
-    /**
-     * @var array A list of paths to invalidate at the end of request.
-     */
-    protected array $pathsToInvalidate = [];
 
     // Public Methods
     // =========================================================================
 
-	/**
+    public function getRules(): array
+    {
+        return array_merge(parent::getRules(), [
+            'accountId' => ['required', 'string'],
+            'bucket' => [Rule::requiredIf(fn() => $this->bucketSelectionMode !== 'manual')],
+            'manualBucket' => [Rule::requiredIf(fn() => $this->bucketSelectionMode === 'manual')],
+        ]);
+    }
+
+    public function getSettingsHtml(): ?string
+    {
+        return app(TemplateRenderer::class)->renderTemplate('cloudflare-r2/fsSettings', [
+            'fs' => $this,
+            'periods' => array_merge(['' => ''], self::_periodList()),
+        ], TemplateMode::Cp);
+    }
+
+    /**
      * @inheritdoc
      */
-    public function __construct(array $config = [])
+    public function getDiskConfig(): array
     {
-        if (isset($config['manualBucket'])) {
-            if (isset($config['bucketSelectionMode']) && $config['bucketSelectionMode'] === 'manual') {
-                $config['bucket'] = ArrayHelper::remove($config, 'manualBucket');
-            } else {
-                unset($config['manualBucket'], $config['manualRegion']);
+        $config = [
+            'driver' => 'r2',
+            'key' => Env::parse($this->keyId),
+            'secret' => Env::parse($this->secret),
+            'bucket' => Env::parse($this->_effectiveBucket()),
+            'endpoint' => 'https://' . Env::parse($this->accountId) . '.r2.cloudflarestorage.com',
+            'region' => $this->region,
+            'url' => $this->getRootUrl(),
+        ];
+
+        $subfolder = $this->_subfolder();
+        if ($subfolder !== '') {
+            $config['prefix'] = $subfolder;
+        }
+
+        if (!empty($this->expires)) {
+            $seconds = self::_expiresInSeconds($this->expires);
+            if ($seconds > 0) {
+                $config['options']['CacheControl'] = 'max-age=' . $seconds;
             }
         }
 
-        parent::__construct($config);
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function behaviors(): array
-    {
-        $behaviors = parent::behaviors();
-        $behaviors['parser'] = [
-            'class' => EnvAttributeParserBehavior::class,
-            'attributes' => [
-				'accountId',
-                'keyId',
-                'secret',
-                'bucket',
-                'subfolder',
-            ],
-        ];
-        return $behaviors;
-    }
-
-    /**
-     * @inheritdoc
-     */
-    protected function defineRules(): array
-    {
-        return array_merge(parent::defineRules(), [
-            [['bucket', 'accountId'], 'required'],
-        ]);
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function getSettingsHtml(): ?string
-    {
-        return Craft::$app->getView()->renderTemplate('cloudflare-r2/fsSettings', [
-            'fs' => $this,
-            'periods' => array_merge(['' => ''], Assets::periodList()),
-        ]);
+        return $config;
     }
 
     /**
      * Get the bucket list using the specified credentials.
      *
      * @param string|null $accountId The account ID
-	 * @param string|null $keyId The key ID
+     * @param string|null $keyId The key ID
      * @param string|null $secret The key secret
      * @return array
      * @throws InvalidArgumentException
@@ -198,19 +155,15 @@ class Fs extends FlysystemFs
     public static function loadBucketList(?string $accountId, ?string $keyId, ?string $secret): array
     {
         $config = self::buildConfigArray($keyId, $secret, $accountId);
-
         $client = static::client($config);
-
         $objects = $client->listBuckets();
 
         if (empty($objects['Buckets'])) {
             return [];
         }
 
-        $buckets = $objects['Buckets'];
         $bucketList = [];
-
-        foreach ($buckets as $bucket) {
+        foreach ($objects['Buckets'] as $bucket) {
             $bucketList[] = [
                 'bucket' => $bucket['Name'],
                 'urlPrefix' => 'https://' . $accountId . '.r2.cloudflarestorage.com/' . $bucket['Name'] . '/',
@@ -227,104 +180,34 @@ class Fs extends FlysystemFs
     {
         $rootUrl = parent::getRootUrl();
 
-        if ($rootUrl) {
-            $rootUrl .= $this->_getRootUrlPath();
+        if ($rootUrl && $this->addSubfolderToRootUrl) {
+            $rootUrl .= $this->_subfolder();
         }
 
         return $rootUrl;
     }
 
-    // Protected Methods
-    // =========================================================================
-
-    /**
-     * @inheritdoc
-     * @return FilesystemAdapter
-     */
-    protected function createAdapter(): FilesystemAdapter
-    {
-        $client = static::client($this->_getConfigArray(), $this->_getCredentials());
-        return new CloudflareR2Adapter($client, App::parseEnv($this->bucket), $this->_subfolder(), new PortableVisibilityConverter($this->visibility()), null, [], false);
-    }
-
-    /**
-     * Get the Amazon S3 client.
-     *
-     * @param array $config client config
-     * @param array $credentials credentials to use when generating a new token
-     * @return S3Client
-     */
-    protected static function client(array $config = [], array $credentials = []): S3Client
-    {
-        if (!empty($config['credentials']) && $config['credentials'] instanceof Credentials) {
-            $config['generateNewConfig'] = static function() use ($credentials) {
-                $args = [
-                    $credentials['keyId'],
-                    $credentials['secret'],
-                    $credentials['accountId'],
-                    true,
-                ];
-                return call_user_func_array(self::class . '::buildConfigArray', $args);
-            };
-        }
-
-        return new S3Client($config);
-    }
-
-    /**
-     * @inheritdoc
-     */
-    protected function addFileMetadataToConfig(array $config): array
-    {
-        if (!empty($this->expires) && DateTimeHelper::isValidIntervalString($this->expires)) {
-            $expires = new DateTime();
-            $now = new DateTime();
-            $expires->modify('+' . $this->expires);
-            $diff = (int)$expires->format('U') - (int)$now->format('U');
-            $config['CacheControl'] = 'max-age=' . $diff;
-        }
-
-        return parent::addFileMetadataToConfig($config);
-    }
-
-    /**
-     * @inheritdoc
-     */
-    protected function invalidateCdnPath(string $path): bool
-    {
-        return true;
-    }
-
-    /**
-     * Purge any queued paths from the CDN.
-     */
-    public function purgeQueuedPaths(): void
-    {
-        return;
-    }
-
     /**
      * Attempt to detect focal point for a path on the bucket and return the
-     * focal point position as an array of decimal parts
+     * focal point position as an array of decimal parts.
      *
      * @param string $filePath
      * @return array
      */
     public function detectFocalPoint(string $filePath): array
     {
-        $extension = StringHelper::toLowerCase(pathinfo($filePath, PATHINFO_EXTENSION));
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
 
-        if (!in_array($extension, ['jpeg', 'jpg', 'png'])) {
+        if (!in_array($extension, ['jpeg', 'jpg', 'png'], true)) {
             return [];
         }
-
 
         $client = new RekognitionClient($this->_getConfigArray());
         $params = [
             'Image' => [
                 'S3Object' => [
-                    'Name' => App::parseEnv($filePath),
-                    'Bucket' => App::parseEnv($this->bucket),
+                    'Name' => Env::parse($filePath),
+                    'Bucket' => Env::parse($this->_effectiveBucket()),
                 ],
             ],
         ];
@@ -346,89 +229,120 @@ class Fs extends FlysystemFs
     }
 
     /**
-     * Build the config array based on a keyID and secret
+     * Build the config array based on a keyId and secret.
      *
-     * @param ?string $keyId The key ID
-     * @param ?string $secret The key secret
-     * @param ?string $accountId The account id
+     * @param string|null $keyId The key ID
+     * @param string|null $secret The key secret
+     * @param string|null $accountId The account ID
      * @param bool $refreshToken If true will always refresh token
      * @return array
      */
-    public static function buildConfigArray(?string $keyId = null, ?string $secret = null, ?string $accountId = null, bool $refreshToken = false): array
-    {
-		$config = [
-            'region' => self::$region,
-			'endpoint' => 'https://'.$accountId.'.r2.cloudflarestorage.com',
+    public static function buildConfigArray(
+        ?string $keyId = null,
+        ?string $secret = null,
+        ?string $accountId = null,
+        bool $refreshToken = false,
+    ): array {
+        return [
+            'region' => 'auto',
+            'endpoint' => 'https://' . $accountId . '.r2.cloudflarestorage.com',
             'version' => 'latest',
-			'credentials' => new Credentials($keyId, $secret)
+            'credentials' => new Credentials($keyId, $secret),
         ];
+    }
 
-        return $config;
+    // Protected Methods
+    // =========================================================================
+
+    /**
+     * Get the S3 client.
+     *
+     * @param array $config client config
+     * @param array $credentials credentials for generating a new token
+     * @return S3Client
+     */
+    protected static function client(array $config = [], array $credentials = []): S3Client
+    {
+        if (!empty($config['credentials']) && $config['credentials'] instanceof Credentials) {
+            $config['generateNewConfig'] = static function() use ($credentials) {
+                return call_user_func_array(
+                    self::class . '::buildConfigArray',
+                    [$credentials['keyId'], $credentials['secret'], $credentials['accountId'], true],
+                );
+            };
+        }
+
+        return new S3Client($config);
     }
 
     // Private Methods
     // =========================================================================
 
     /**
-     * Returns the parsed subfolder path
-     *
-     * @return string
+     * Returns the active bucket name based on the current selection mode.
+     * Reads from $manualBucket in manual mode, $bucket in choose mode.
      */
+    private function _effectiveBucket(): string
+    {
+        if ($this->bucketSelectionMode === 'manual') {
+            return $this->manualBucket ?? '';
+        }
+
+        return $this->bucket ?? '';
+    }
+
     private function _subfolder(): string
     {
-        if ($this->subfolder && ($subfolder = rtrim(App::parseEnv($this->subfolder), '/')) !== '') {
+        if ($this->subfolder && ($subfolder = rtrim(Env::parse($this->subfolder), '/')) !== '') {
             return $subfolder . '/';
         }
 
         return '';
     }
 
-    /**
-     * Returns the root path for URLs
-     *
-     * @return string
-     */
-    private function _getRootUrlPath(): string
-    {
-        if ($this->addSubfolderToRootUrl) {
-            return $this->_subfolder();
-        }
-        return '';
-    }
-
-    /**
-     * Get the config array for AWS Clients.
-     *
-     * @return array
-     */
     private function _getConfigArray(): array
     {
         $credentials = $this->_getCredentials();
-
         return self::buildConfigArray($credentials['keyId'], $credentials['secret'], $credentials['accountId']);
     }
 
-    /**
-     * Return the credentials as an array
-     *
-     * @return array
-     */
     private function _getCredentials(): array
     {
         return [
-            'keyId' => App::parseEnv($this->keyId),
-            'secret' => App::parseEnv($this->secret),
-            'accountId' => App::parseEnv($this->accountId),
+            'keyId' => Env::parse($this->keyId),
+            'secret' => Env::parse($this->secret),
+            'accountId' => Env::parse($this->accountId),
         ];
     }
 
-    /**
-     * Returns the visibility setting for the Fs.
-     *
-     * @return string
-     */
-    protected function visibility(): string
+    private static function _periodList(): array
     {
-        return $this->makeUploadsPublic ? Visibility::PUBLIC : Visibility::PRIVATE;
+        return [
+            'seconds' => 'Seconds',
+            'minutes' => 'Minutes',
+            'hours' => 'Hours',
+            'days' => 'Days',
+            'weeks' => 'Weeks',
+            'months' => 'Months',
+            'years' => 'Years',
+        ];
+    }
+
+    private static function _expiresInSeconds(string $expires): int
+    {
+        if (empty(trim($expires))) {
+            return 0;
+        }
+
+        try {
+            $now = new DateTime();
+            $future = (clone $now)->modify('+' . $expires);
+            if ($future === false) {
+                return 0;
+            }
+            return max(0, $future->getTimestamp() - $now->getTimestamp());
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 }

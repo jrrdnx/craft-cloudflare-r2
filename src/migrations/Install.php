@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /**
  * @link https://jarrodnix.dev/
  * @copyright Copyright (c) Jarrod D Nix
@@ -7,10 +9,7 @@
 
 namespace jrrdnx\cloudflarer2\migrations;
 
-use Craft;
-use jrrdnx\cloudflarer2\Fs;
-use craft\db\Migration;
-use craft\services\ProjectConfig;
+use CraftCms\Cms\Database\Migration;
 
 /**
  * Installation Migration
@@ -20,22 +19,7 @@ use craft\services\ProjectConfig;
  */
 class Install extends Migration
 {
-    // Public Methods
-    // =========================================================================
+    public function up(): void {}
 
-    /**
-     * @inheritdoc
-     */
-    public function safeUp(): bool
-    {
-        return true;
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function safeDown(): bool
-    {
-        return true;
-    }
+    public function down(): void {}
 }

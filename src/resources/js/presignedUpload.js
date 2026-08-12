@@ -17,9 +17,67 @@
 
   var MAX_CONCURRENT_PARTS = 3;
 
+  // Reloading or navigating away mid-upload throws the upload away, and any
+  // multipart parts already in the bucket go on costing storage until the
+  // upload is aborted. Warn first, and abort what we can on the way out.
+  var inFlight = {};
+  var inFlightCount = 0;
+  var unloadBound = false;
+
+  function warnOnUnload(event) {
+    if (inFlightCount < 1) {
+      return undefined;
+    }
+
+    // Browsers show their own wording; the string is only a legacy formality.
+    event.preventDefault();
+    event.returnValue = '';
+
+    return '';
+  }
+
+  function abortOnUnload(event) {
+    // A persisted page is going into the back/forward cache and may well come
+    // back with the upload still running — nothing to clean up yet.
+    if ((event && event.persisted) || !navigator.sendBeacon) {
+      return;
+    }
+
+    Object.keys(inFlight).forEach(function (token) {
+      var body = new FormData();
+      body.append('token', token);
+
+      if (Craft.csrfTokenName) {
+        body.append(Craft.csrfTokenName, Craft.csrfTokenValue);
+      }
+
+      // Fire-and-forget: a normal XHR would be killed with the page.
+      navigator.sendBeacon(inFlight[token], body);
+    });
+  }
+
+  function beginUpload() {
+    inFlightCount++;
+
+    if (!unloadBound) {
+      window.addEventListener('beforeunload', warnOnUnload);
+      window.addEventListener('pagehide', abortOnUnload);
+      unloadBound = true;
+    }
+  }
+
+  function endUpload(token) {
+    inFlightCount = Math.max(0, inFlightCount - 1);
+
+    if (token) {
+      delete inFlight[token];
+    }
+  }
+
   var R2Uploader = Craft.Uploader.extend(
     {
       _directUploads: 0,
+      _hud: null,
 
       /**
        * Craft.Uploader counts jQuery File Upload's active transfers, which never
@@ -102,7 +160,9 @@
         var deferred = false;
 
         this._directUploads++;
+        beginUpload();
         this.$element.trigger('fileuploadstart');
+        this._openHud(file);
         this._reportProgress(0, file.size);
 
         this._post('start', {
@@ -120,6 +180,9 @@
             }
 
             token = plan.token;
+
+            // Now abortable, so it can be cleaned up if the page goes away.
+            inFlight[token] = Craft.getActionUrl(self._settings().actions.abort);
 
             if (plan.mode === 'multipart') {
               return self._uploadParts(file, plan).then(function (parts) {
@@ -153,6 +216,8 @@
           })
           .then(function () {
             self._directUploads--;
+            endUpload(token);
+            self._closeHud();
 
             // Craft's uploader owns the lifecycle now; it'll fire its own events.
             if (!deferred) {
@@ -285,6 +350,47 @@
 
       _reportProgress: function (loaded, total) {
         this.$element.trigger('fileuploadprogressall', [{loaded: loaded, total: total}]);
+
+        if (this._hud) {
+          var percent = total ? Math.min(Math.round((loaded / total) * 100), 100) : 0;
+          this._hud.bar.setProgressPercentage(percent, true);
+          this._hud.$percent.text(percent + '%');
+        }
+      },
+
+      /**
+       * Puts up a progress bar, but only when whoever created this uploader
+       * isn't already showing one.
+       *
+       * Craft's replace flow is the case that matters: it only wires up a
+       * spinner, which told you nothing over the several minutes a large direct
+       * upload can take.
+       */
+      _openHud: function (file) {
+        if ((this.events && this.events.fileuploadprogressall) || this._hud) {
+          return;
+        }
+
+        var $hud = $('<div class="r2-upload-progress"/>').appendTo(Garnish.$bod);
+        var $head = $('<div class="r2-upload-progress__head"/>').appendTo($hud);
+
+        $('<span class="r2-upload-progress__name"/>').text(file.name).appendTo($head);
+
+        this._hud = {
+          $el: $hud,
+          $percent: $('<span class="r2-upload-progress__percent"/>').text('0%').appendTo($head),
+          bar: new Craft.ProgressBar($hud),
+        };
+
+        this._hud.bar.showProgressBar();
+      },
+
+      _closeHud: function () {
+        // Hold it open while anything else is still in flight.
+        if (this._hud && this._directUploads < 1) {
+          this._hud.$el.remove();
+          this._hud = null;
+        }
       },
 
       _reportFailure: function (file, error) {

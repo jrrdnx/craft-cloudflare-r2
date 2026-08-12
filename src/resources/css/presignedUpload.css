@@ -1,0 +1,69 @@
+/**
+ * Progress readout for uploads that go straight to the bucket.
+ *
+ * Only shown when whoever created the uploader isn't already displaying
+ * progress of their own — replacing a file, most notably, only puts up a
+ * spinner, which says very little over a multi-minute upload.
+ */
+.r2-upload-progress {
+    /* Contains the progress bar, which Craft positions absolutely. */
+    position: fixed;
+    inset-block-end: 24px;
+    inset-inline-end: 24px;
+    z-index: 100;
+    box-sizing: border-box;
+    width: 300px;
+    max-width: calc(100vw - 48px);
+    padding: 12px 14px 14px;
+    border-radius: 6px;
+    background: var(--gray-800, #29323d);
+    color: var(--white, #fff);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.r2-upload-progress__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-block-end: 8px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.r2-upload-progress__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.r2-upload-progress__percent {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.75;
+}
+
+/**
+ * Craft's progress bar expects to be dropped into a much larger container: it's
+ * absolutely positioned, inset 20% from the start edge, and 60% wide. Left
+ * alone in a panel this size it sits out of flow and hangs off the edge, so it
+ * gets put back in flow and stretched to fit.
+ *
+ * The colours assume a light background too — the fill is --gray-700, only 5%
+ * lighter than this panel's --gray-800, which reads as invisible.
+ */
+.r2-upload-progress .progressbar {
+    position: relative;
+    inset-block-start: auto;
+    inset-inline-start: 0;
+    inset-inline-end: auto;
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.r2-upload-progress .progressbar-inner {
+    background-color: var(--white, #fff);
+}

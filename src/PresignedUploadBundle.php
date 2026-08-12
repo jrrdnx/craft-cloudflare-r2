@@ -33,6 +33,13 @@ class PresignedUploadBundle extends AssetBundle
     /**
      * @inheritdoc
      */
+    public $css = [
+        'css/presignedUpload.css',
+    ];
+
+    /**
+     * @inheritdoc
+     */
     public $js = [
         'js/presignedUpload.js',
     ];

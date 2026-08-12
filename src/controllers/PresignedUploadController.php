@@ -59,7 +59,12 @@ class PresignedUploadController extends BaseController
     {
         $this->requireCpRequest();
         $this->requirePostRequest();
-        $this->requireAcceptsJson();
+
+        // An abort may arrive via navigator.sendBeacon() as the page unloads,
+        // which can't set an Accept header.
+        if ($action->id !== 'abort') {
+            $this->requireAcceptsJson();
+        }
 
         return parent::beforeAction($action);
     }

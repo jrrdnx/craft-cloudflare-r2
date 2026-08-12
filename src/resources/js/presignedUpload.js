@@ -38,6 +38,12 @@
           return this.base(event, data);
         }
 
+        // A replace with no asset to replace isn't something we can target;
+        // Craft's uploader knows what to do with it.
+        if (this.settings.replace && !this.formData.assetId) {
+          return this.base(event, data);
+        }
+
         event.stopPropagation();
 
         if (this._validate(file)) {

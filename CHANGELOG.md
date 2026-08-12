@@ -4,6 +4,7 @@
 
 ### Added
 - Added presigned upload support, letting clients upload straight to the bucket instead of proxying the bytes through PHP
+- Added presigned support for replacing an existing asset's file, including transform invalidation and the `beforeReplaceFile`/`afterReplaceFile` events
 - Added a “Use Presigned URLs” filesystem setting, off by default, with a configurable size threshold below which uploads keep going through PHP
 - Added `SupportsPresignedUploads`, which `Fs` now implements
 - Added `Fs::isPresignedUploadEnabled()`, `Fs::getPresignedUploadThreshold()`, and `Fs::shouldPresignUpload()` so consumers can ask the filesystem rather than hardcoding the policy

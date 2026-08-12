@@ -136,6 +136,18 @@ $asset = $indexer->indexFile($volume, 'videos/trailer.mp4', $session->id);
 
 Mind the two path flavours: `getPresignedUpload()` takes a path relative to the *filesystem* and returns the full object key on `$upload->path` (including the filesystem's Subfolder), whereas `indexFile()` wants a path relative to the *volume*.
 
+### Replacing a file
+
+Replacing works the same way, and needs no extra wiring — Craft's replace flows already pass the asset's ID through, so the upload is presigned straight onto that asset's path.
+
+Overwriting in place is safe. S3 and R2 only swap an object once the whole thing has arrived, and a multipart upload doesn't materialize until it's completed, so a cancelled or failed replacement leaves the original exactly as it was. Once the object lands, the asset's filename, kind, size, modified date and dimensions are refreshed, its transforms are purged, and the `beforeReplaceFile` / `afterReplaceFile` events fire as usual.
+
+Image dimensions are read from the leading bytes of the object rather than by downloading it.
+
+### What still goes through PHP
+
+Assets fields with a selection condition are left to the normal uploader, since the target folder isn't known until the file has been vetted. This falls back automatically; there's nothing to configure.
+
 ### Security
 
 Presigning delegates write access, so the caller is responsible for the parts the filesystem can't see:

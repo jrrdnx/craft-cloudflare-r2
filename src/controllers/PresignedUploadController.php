@@ -4,17 +4,23 @@ namespace jrrdnx\cloudflarer2\controllers;
 
 use Craft;
 use craft\elements\Asset;
+use craft\events\ReplaceAssetEvent;
 use craft\fields\Assets as AssetsField;
 use craft\helpers\Assets as AssetsHelper;
+use craft\helpers\Image;
 use craft\helpers\Json;
+use craft\i18n\Formatter;
 use craft\models\Volume;
 use craft\models\VolumeFolder;
+use craft\services\Assets as AssetsService;
 use craft\web\Controller as BaseController;
+use DateTime;
 use jrrdnx\cloudflarer2\models\MultipartUpload;
 use jrrdnx\cloudflarer2\SupportsPresignedUploads;
 use Throwable;
 use yii\web\BadRequestHttpException;
 use yii\web\ForbiddenHttpException;
+use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
 /**
@@ -74,7 +80,20 @@ class PresignedUploadController extends BaseController
             throw new BadRequestHttpException('A positive file size is required.');
         }
 
+        // Replacing swaps the file under an asset that already exists, so it
+        // resolves its target from the asset rather than from a folder.
+        if ($assetId = (int)$this->request->getBodyParam('assetId')) {
+            return $this->_startReplace($assetId, $filename, $size, $mimeType);
+        }
+
         $folder = $this->_resolveFolder();
+
+        // Nothing to upload into. Hand it back rather than failing, and Craft's
+        // own uploader takes it from here.
+        if (!$folder) {
+            return $this->asJson(['mode' => 'traditional']);
+        }
+
         $volume = $folder->getVolume();
         $fs = $volume->getFs();
 
@@ -104,7 +123,10 @@ class PresignedUploadController extends BaseController
 
         $fsPath = $volume->getSubpath() . $volumePath;
 
+        // Sealed into the token rather than stored, so there's no state to clean
+        // up if the client walks away mid-upload.
         $state = [
+            'mode' => 'create',
             'userId' => (int)Craft::$app->getUser()->getId(),
             'volumeId' => (int)$volume->id,
             'folderId' => (int)$folder->id,
@@ -114,6 +136,106 @@ class PresignedUploadController extends BaseController
             'expiresAt' => time() + self::TOKEN_TTL,
         ];
 
+        return $this->_presignInto($fs, $fsPath, $size, $mimeType, $state, $filename);
+    }
+
+    /**
+     * Presigns a replacement for an existing asset's file.
+     *
+     * Overwriting in place is safe: S3 and R2 only ever swap an object once the
+     * whole thing has arrived, and a multipart upload doesn't materialize until
+     * it's completed. A cancelled or failed replacement leaves the original
+     * exactly as it was.
+     *
+     * @param int $assetId
+     * @param string $filename
+     * @param int $size
+     * @param string|null $mimeType
+     * @return Response
+     * @throws BadRequestHttpException
+     * @throws NotFoundHttpException
+     */
+    private function _startReplace(int $assetId, string $filename, int $size, ?string $mimeType): Response
+    {
+        $asset = Craft::$app->getAssets()->getAssetById($assetId);
+
+        if (!$asset) {
+            throw new NotFoundHttpException('Asset not found.');
+        }
+
+        $volume = $asset->getVolume();
+        $fs = $volume->getFs();
+
+        if (!$fs instanceof SupportsPresignedUploads || !$fs->shouldPresignUpload($size)) {
+            return $this->asJson(['mode' => 'traditional']);
+        }
+
+        $this->_requireReplacePermission($asset);
+
+        $filename = AssetsHelper::prepareAssetName($filename);
+        $this->_requireAllowedExtension($filename);
+
+        // Fire this before presigning, since a handler may rename the file and
+        // the new name decides where the object lands.
+        $assets = Craft::$app->getAssets();
+
+        if ($assets->hasEventHandlers(AssetsService::EVENT_BEFORE_REPLACE_ASSET)) {
+            $event = new ReplaceAssetEvent([
+                'asset' => $asset,
+                'replaceWith' => '',
+                'filename' => $filename,
+            ]);
+            $assets->trigger(AssetsService::EVENT_BEFORE_REPLACE_ASSET, $event);
+            $filename = AssetsHelper::prepareAssetName($event->filename);
+        }
+
+        $oldPath = $asset->getPath();
+        $folderPath = $asset->folderPath ? rtrim($asset->folderPath, '/') . '/' : '';
+
+        // Renaming onto a name another asset already holds would leave two
+        // records pointing at one object.
+        if ($filename !== $asset->getFilename() && $volume->fileExists($folderPath . $filename)) {
+            $filename = $assets->getNameReplacementInFolder($filename, $asset->folderId);
+        }
+
+        $volumePath = $folderPath . $filename;
+        $fsPath = $volume->getSubpath() . $volumePath;
+
+        $state = [
+            'mode' => 'replace',
+            'userId' => (int)Craft::$app->getUser()->getId(),
+            'assetId' => $asset->id,
+            'volumeId' => (int)$volume->id,
+            'filename' => $filename,
+            'volumePath' => $volumePath,
+            'oldPath' => $oldPath,
+            'size' => $size,
+            'mimeType' => $mimeType,
+            'expiresAt' => time() + self::TOKEN_TTL,
+        ];
+
+        return $this->_presignInto($fs, $fsPath, $size, $mimeType, $state, $filename);
+    }
+
+    /**
+     * Presigns an upload to a resolved path and builds the response for it.
+     *
+     * @param SupportsPresignedUploads $fs
+     * @param string $fsPath
+     * @param int $size
+     * @param string|null $mimeType
+     * @param array $state
+     * @param string $filename
+     * @return Response
+     */
+    private function _presignInto(
+        SupportsPresignedUploads $fs,
+        string $fsPath,
+        int $size,
+        ?string $mimeType,
+        array $state,
+        string $filename,
+    ): Response {
         if ($size < self::MULTIPART_THRESHOLD) {
             $upload = $fs->getPresignedUpload($fsPath, $mimeType, self::PRESIGN_TTL);
 
@@ -132,9 +254,6 @@ class PresignedUploadController extends BaseController
 
         $upload = $fs->beginMultipartUpload($fsPath, $mimeType);
 
-        // Everything needed to finish or abort the upload later. It's sealed
-        // into the token rather than stored, so there's no state to clean up if
-        // the client walks away mid-upload.
         $state['uploadId'] = $upload->uploadId;
         $state['bucket'] = $upload->bucket;
         $state['fsPath'] = $upload->path;
@@ -198,6 +317,10 @@ class PresignedUploadController extends BaseController
             );
         }
 
+        if (($state['mode'] ?? null) === 'replace') {
+            return $this->_completeReplace($volume, $state);
+        }
+
         $asset = $this->_indexAsset($volume, $state);
 
         return $this->asJson([
@@ -205,6 +328,137 @@ class PresignedUploadController extends BaseController
             'filename' => $asset->getFilename(),
             'url' => $asset->getUrl(),
         ]);
+    }
+
+    /**
+     * Points an existing asset at its newly uploaded file.
+     *
+     * This is the tail of craft\elements\Asset::_relocateFile() minus the part
+     * that moves bytes around, since the object is already sitting where it
+     * needs to be. Neither `tempFilePath` nor `newLocation` is set, so saving
+     * won't try to relocate anything.
+     *
+     * @param Volume $volume
+     * @param array $state
+     * @return Response
+     * @throws BadRequestHttpException
+     * @throws NotFoundHttpException
+     */
+    private function _completeReplace(Volume $volume, array $state): Response
+    {
+        $asset = Craft::$app->getAssets()->getAssetById($state['assetId']);
+
+        if (!$asset) {
+            throw new NotFoundHttpException('Asset not found.');
+        }
+
+        $this->_requireReplacePermission($asset);
+
+        // Renamed, so the old object is now orphaned.
+        if ($state['oldPath'] !== $state['volumePath'] && $volume->fileExists($state['oldPath'])) {
+            $volume->deleteFile($state['oldPath']);
+        }
+
+        Craft::$app->getImageTransforms()->deleteAllTransformData($asset);
+
+        $asset->setFilename($state['filename']);
+        $asset->kind = AssetsHelper::getFileKindByExtension($state['filename']);
+        $asset->size = $volume->getFileSize($state['volumePath']);
+        $asset->uploaderId = Craft::$app->getUser()->getId();
+
+        if ($state['mimeType']) {
+            $asset->setMimeType($state['mimeType']);
+        }
+
+        $dateModified = $volume->getDateModified($state['volumePath']);
+        $asset->dateModified = $dateModified ? new DateTime('@' . $dateModified) : null;
+
+        [$width, $height] = $this->_imageSize($volume, $asset, $state['volumePath']);
+        $asset->setWidth($width);
+        $asset->setHeight($height);
+
+        $asset->setScenario(Asset::SCENARIO_INDEX);
+        Craft::$app->getElements()->saveElement($asset, false);
+
+        $assets = Craft::$app->getAssets();
+
+        if ($assets->hasEventHandlers(AssetsService::EVENT_AFTER_REPLACE_ASSET)) {
+            $assets->trigger(AssetsService::EVENT_AFTER_REPLACE_ASSET, new ReplaceAssetEvent([
+                'asset' => $asset,
+                'filename' => $asset->getFilename(),
+            ]));
+        }
+
+        // Matches what craft\controllers\AssetsController::actionReplaceFile()
+        // returns, so Craft's own replace handlers can consume this unchanged.
+        return $this->asJson([
+            'success' => true,
+            'assetId' => $asset->id,
+            'filename' => $asset->getFilename(),
+            'formattedSize' => $asset->getFormattedSize(0),
+            'formattedSizeInBytes' => $asset->getFormattedSizeInBytes(false),
+            'formattedDateUpdated' => Craft::$app->getFormatter()->asDatetime(
+                $asset->dateUpdated,
+                Formatter::FORMAT_WIDTH_SHORT,
+                true,
+            ),
+            'dimensions' => $asset->getDimensions(),
+            'updatedTimestamp' => $asset->dateUpdated->getTimestamp(),
+            'resultingUrl' => $asset->getUrl(),
+        ]);
+    }
+
+    /**
+     * Reads an image's dimensions straight off the bucket.
+     *
+     * Only the leading bytes get read, so this doesn't pull the whole file back
+     * down just to find out how big the picture is.
+     *
+     * @param Volume $volume
+     * @param Asset $asset
+     * @param string $path
+     * @return array{int|null, int|null}
+     */
+    private function _imageSize(Volume $volume, Asset $asset, string $path): array
+    {
+        if ($asset->kind !== Asset::KIND_IMAGE) {
+            return [null, null];
+        }
+
+        $stream = null;
+
+        try {
+            $stream = $volume->getFileStream($path);
+            $size = Image::imageSizeByStream($stream);
+
+            if (is_array($size) && count($size) === 2) {
+                return [(int)$size[0] ?: null, (int)$size[1] ?: null];
+            }
+        } catch (Throwable $e) {
+            Craft::warning("Couldn’t read image dimensions for $path: {$e->getMessage()}", __METHOD__);
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+
+        return [null, null];
+    }
+
+    /**
+     * Requires permission to replace a given asset's file.
+     *
+     * @param Asset $asset
+     * @throws ForbiddenHttpException
+     */
+    private function _requireReplacePermission(Asset $asset): void
+    {
+        $volume = $asset->getVolume();
+        $this->requirePermission("replaceFiles:$volume->uid");
+
+        if ($asset->uploaderId !== Craft::$app->getUser()->getId()) {
+            $this->requirePermission("replacePeerFiles:$volume->uid");
+        }
     }
 
     /**
@@ -248,16 +502,16 @@ class PresignedUploadController extends BaseController
      * Mirrors how craft\controllers\AssetsController::actionUpload() resolves a
      * target, so field-driven uploads land where Craft would have put them.
      *
-     * @return VolumeFolder
-     * @throws BadRequestHttpException
+     * @return VolumeFolder|null Null if the request names no upload target
+     * @throws BadRequestHttpException if a target was named but isn't usable
      */
-    private function _resolveFolder(): VolumeFolder
+    private function _resolveFolder(): ?VolumeFolder
     {
         $folderId = (int)$this->request->getBodyParam('folderId') ?: null;
         $fieldId = (int)$this->request->getBodyParam('fieldId') ?: null;
 
         if (!$folderId && !$fieldId) {
-            throw new BadRequestHttpException('No target destination provided for uploading.');
+            return null;
         }
 
         if (!$folderId) {

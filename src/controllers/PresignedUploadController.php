@@ -297,7 +297,14 @@ class PresignedUploadController extends BaseController
             throw new BadRequestHttpException('The target volume no longer exists.');
         }
 
-        $this->requirePermission("saveAssets:$volume->uid");
+        $isReplace = ($state['mode'] ?? null) === 'replace';
+
+        // Replacing is gated on replaceFiles instead, checked further down —
+        // requiring saveAssets here would lock out anyone granted one and not
+        // the other, after they'd already uploaded the whole file.
+        if (!$isReplace) {
+            $this->requirePermission("saveAssets:$volume->uid");
+        }
 
         if (isset($state['uploadId'])) {
             /** @var SupportsPresignedUploads $fs */
@@ -315,14 +322,19 @@ class PresignedUploadController extends BaseController
         $actualSize = $volume->getFileSize($state['volumePath']);
 
         if ($actualSize !== $state['size']) {
-            $volume->deleteFile($state['volumePath']);
+            // Only safe to bin the object while nothing points at it. On a
+            // replace this path belongs to the asset itself, and deleting it
+            // would leave the asset pointing at nothing at all.
+            if (!$isReplace) {
+                $volume->deleteFile($state['volumePath']);
+            }
 
             throw new BadRequestHttpException(
                 "The uploaded file is {$actualSize} bytes, but {$state['size']} bytes were expected."
             );
         }
 
-        if (($state['mode'] ?? null) === 'replace') {
+        if ($isReplace) {
             return $this->_completeReplace($volume, $state);
         }
 
@@ -384,6 +396,15 @@ class PresignedUploadController extends BaseController
 
         $asset->setScenario(Asset::SCENARIO_INDEX);
         Craft::$app->getElements()->saveElement($asset, false);
+
+        // Handlers of beforeReplaceFile invalidate the CDN, but that fires
+        // before the upload starts — long enough for a CDN to have re-cached
+        // the file we were about to replace. Invalidate again now it's live.
+        $fs = $volume->getFs();
+
+        if (method_exists($fs, 'invalidateCdnPath')) {
+            $fs->invalidateCdnPath($state['volumePath']);
+        }
 
         $assets = Craft::$app->getAssets();
 

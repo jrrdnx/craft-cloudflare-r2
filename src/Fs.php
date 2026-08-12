@@ -609,8 +609,12 @@ class Fs extends FlysystemFs implements SupportsPresignedUploads
 
     /**
      * @inheritdoc
+     *
+     * Public so callers can invalidate a path after replacing the object at it,
+     * matching craft\awss3\Fs. A direct upload can take minutes, which is a long
+     * time for a CDN to re-cache the file that's about to be replaced.
      */
-    protected function invalidateCdnPath(string $path): bool
+    public function invalidateCdnPath(string $path): bool
     {
         return true;
     }

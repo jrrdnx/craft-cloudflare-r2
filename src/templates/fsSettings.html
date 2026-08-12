@@ -102,6 +102,30 @@
 
 <hr/>
 
+{{ forms.lightswitchField({
+    label: "Use Presigned URLs"|t('cloudflare-r2'),
+    instructions: "Turn this on to let clients upload straight to the bucket using presigned URLs, instead of sending the file through PHP. This sidesteps `post_max_size`, `upload_max_filesize` and `max_execution_time`, but the bucket needs a CORS policy allowing `PUT` from your site, with `ETag` exposed. Requires a plugin or module to drive the upload — the filesystem only signs the requests."|t('cloudflare-r2'),
+    id: 'presignedUploads',
+    name: 'presignedUploads',
+    on: fs.presignedUploads,
+    toggle: 'presigned-upload-settings',
+    errors: fs.getErrors('presignedUploads')
+}) }}
+
+<div id="presigned-upload-settings" class="{{ not fs.presignedUploads ? 'hidden' }}">
+    {{ forms.textField({
+        label: "Presigned Upload Threshold"|t('cloudflare-r2'),
+        instructions: "Files at least this large (in MB) will be uploaded with a presigned URL. Smaller ones keep using the normal upload, which is a single request rather than three. Set to 0 to use presigned URLs for every upload."|t('cloudflare-r2'),
+        id: 'presignedUploadThresholdMb',
+        name: 'presignedUploadThresholdMb',
+        type: 'number',
+        min: '0',
+        size: 5,
+        value: (fs.presignedUploadThreshold / (1024 * 1024))|round,
+        errors: fs.getErrors('presignedUploadThreshold')
+    }) }}
+</div>
+
 <hr />
 {% set cacheInput %}
     {% set expires = (fs.expires|length > 0 ? fs.expires|split(' ') : ['', ''])%}

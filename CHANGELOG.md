@@ -1,5 +1,11 @@
 # Release Notes for Cloudflare R2
 
+## 1.2.1 - 2026-09-18
+
+### Fixed
+
+- Pass empty string to rtrim() if App::parseEnv() returns null ([#14](https://github.com/jrrdnx/craft-cloudflare-r2/issues/14))
+
 ## 1.2.0 - 2026-08-12
 
 ### Added
